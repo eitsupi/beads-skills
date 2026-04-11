@@ -45,6 +45,11 @@ Parse the bd task title or description for the roborev job ID. The
 convention is: the title contains `roborev show <job_id>` or
 `roborev fix <job_id>`.
 
+If the title contains `Review failed`, the roborev job itself may not
+exist or may be unrunnable. In that case, skip step 3 and inform the
+user — they may want to re-trigger the review or close the bd task
+without a corresponding roborev action.
+
 If the job ID cannot be determined from the bd task, ask the user.
 
 ### 3. Fetch review findings
@@ -103,6 +108,8 @@ closure from skip/defer decisions — always ask separately. Then:
 
 ```bash
 # Close roborev review
+# NOTE: always run `roborev comment` before `roborev address`.
+# Skipping the comment leaves no record of what was done.
 roborev comment <job_id> "<summary of changes>"
 roborev address <job_id>
 

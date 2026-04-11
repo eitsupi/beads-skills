@@ -72,13 +72,16 @@ ORDER BY i.updated_at DESC
 "
 ```
 
+`<STATUS_FILTER>` is a placeholder for you (the agent) to replace before
+running the query — it is not valid SQL as written.
+
 If `--open` was passed, replace `<STATUS_FILTER>` with:
 
 ```sql
   AND i2.status != 'closed'
 ```
 
-Otherwise remove `<STATUS_FILTER>`.
+Otherwise remove `<STATUS_FILTER>` entirely (including the line).
 
 ## Step 3 — Interpret
 
