@@ -42,7 +42,7 @@ If nothing is found, inform the user there are no review tasks.
 ### 2. Extract roborev job IDs
 
 Parse the bd task title or description for the roborev job ID. The
-convention is: the title contains `roborev show <job_id>` or
+convention is: the title contains `roborev show --job <job_id>` or
 `roborev fix <job_id>`.
 
 If the title contains `Review failed`, the roborev job itself may not
