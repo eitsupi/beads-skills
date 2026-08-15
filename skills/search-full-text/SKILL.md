@@ -11,80 +11,63 @@ license: MIT
 
 Search beads issues and comments for `$0`. Surface useful matches to the user.
 
-`$0` is the keyword or phrase. Pass `--open` to restrict results to non-closed issues.
-
-Use `dolt` directly on the beads data directory. Do **not** use `bd sql` here, because `bd sql` is not supported in embedded/direct mode.
+`$0` is one or more keywords or phrases. Pass `--open` to restrict results to non-closed issues.
 
 If `$0` appears truncated (e.g., user typed `PR #1234` but `$0` is just `PR`), infer the full intended keyword from the original user message and use that.
 
-## Step 1 — Resolve database
+Stay in the target beads workspace and invoke the bundled script by its resolved path. Do not `cd` to the skill directory because `bd info` resolves the database from the working directory.
 
 ```bash
-BEADS_DIR=$(bd info | awk -F': ' '/^Database:/{print $2}')
-DB=$(dolt --data-dir "$BEADS_DIR" sql -q "SHOW DATABASES" -r csv 2>/dev/null \
-  | awk -F, 'NR>1 && $1 !~ /^(dolt|mysql|information_schema)$/ {print $1; exit}')
+<skill-directory>/scripts/search-full-text.sh [--open] [--regex] "<search term>" ["<search term>" ...]
 ```
 
-Validate both variables:
-- if `BEADS_DIR` is empty, stop and report that beads DB path could not be determined
-- if `DB` is empty, stop and report that target Dolt database could not be determined
+## Search semantics
 
-## Step 2 — Escape keyword and run query
-
-Set `RAW_KW` to the intended keyword (after any `#123` reconstruction), then escape:
+Treat each positional argument as one literal substring search term. Multiple arguments always use **OR**, never AND: an issue is returned when any term occurs in any searched issue field or comment.
 
 ```bash
-KW=$(printf '%s' "$RAW_KW" \
-  | sed -e 's/\\/\\\\/g' -e "s/'/''/g" -e 's/%/\\%/g' -e 's/_/\\_/g')
+# One term
+<skill-directory>/scripts/search-full-text.sh foo
+
+# Two terms using OR: matches either foo or baz
+<skill-directory>/scripts/search-full-text.sh foo baz
+
+# One phrase: matches the contiguous substring "foo bar"
+<skill-directory>/scripts/search-full-text.sh "foo bar"
+
+# A phrase OR another term
+<skill-directory>/scripts/search-full-text.sh "foo bar" baz
 ```
 
-Run:
+The script has no native AND mode. If the user explicitly requests AND, do not pass the terms as separate arguments and claim an AND search. Run one search per term and intersect the returned issue IDs, or report that native AND search is unsupported.
+
+Pass `--regex` to interpret each argument as a regular expression instead of a literal substring. Multiple regular-expression arguments still use OR. Regular expressions are case-sensitive by default; use `(?i)` for case-insensitive matching.
 
 ```bash
-dolt --data-dir "$BEADS_DIR" sql -r csv -q "
-SELECT
-  i.id,
-  LEFT(i.title, 60)       AS title,
-  i.status,
-  i.priority,
-  i.issue_type            AS type,
-  DATE(i.updated_at)      AS updated,
-  CASE
-    WHEN i.title        LIKE '%${KW}%' ESCAPE '\\\\' THEN 'title'
-    WHEN i.description  LIKE '%${KW}%' ESCAPE '\\\\' THEN 'description'
-    WHEN i.notes        LIKE '%${KW}%' ESCAPE '\\\\' THEN 'notes'
-    WHEN i.close_reason LIKE '%${KW}%' ESCAPE '\\\\' THEN 'close_reason'
-    ELSE 'comment'
-  END AS matched_in
-FROM ${DB}.issues i
-WHERE i.id IN (
-  SELECT DISTINCT i2.id
-  FROM ${DB}.issues i2
-  LEFT JOIN ${DB}.comments c ON i2.id = c.issue_id
-  WHERE i2.title        LIKE '%${KW}%' ESCAPE '\\\\'
-     OR i2.description  LIKE '%${KW}%' ESCAPE '\\\\'
-     OR i2.notes        LIKE '%${KW}%' ESCAPE '\\\\'
-     OR i2.close_reason LIKE '%${KW}%' ESCAPE '\\\\'
-     OR c.text          LIKE '%${KW}%' ESCAPE '\\\\'
-  <STATUS_FILTER>
-)
-ORDER BY i.updated_at DESC
-"
+# Alternation in one regular expression
+<skill-directory>/scripts/search-full-text.sh --regex 'foo|baz'
+
+# Both terms in either order, within the same field or comment
+<skill-directory>/scripts/search-full-text.sh --regex '(?=.*foo)(?=.*bar)'
+
+# Case-insensitive matching
+<skill-directory>/scripts/search-full-text.sh --regex '(?i)^foo'
 ```
 
-`<STATUS_FILTER>` is a placeholder for you (the agent) to replace before
-running the query — it is not valid SQL as written.
+A regular expression is evaluated against each issue field and each comment separately. Lookaheads therefore cannot require one term in the title and another term in a comment. For AND across different fields or comments, run separate searches and intersect issue IDs.
 
-If `--open` was passed, replace `<STATUS_FILTER>` with:
+The script prints its working directory and resolved beads database to stderr. Confirm both identify the intended workspace before interpreting the CSV. If either is wrong, stop and rerun from the correct workspace.
 
-```sql
-  AND i2.status != 'closed'
+If invocation fails with `permission denied`, restore the execute bit once and retry:
+
+```bash
+chmod +x <skill-directory>/scripts/search-full-text.sh
 ```
 
-Otherwise remove `<STATUS_FILTER>` entirely (including the line).
+The script uses `dolt` directly because `bd sql` is not supported in embedded/direct mode. Report its stderr and stop if it exits nonzero.
 
-## Step 3 — Interpret
+Interpret the CSV output:
 
-- No rows: report `No matching issues found for: <keyword>`
+- No rows: report `No matching issues found for: <keywords>`
 - Rows found: report count and show the CSV table
 - For deep inspection: use `bd show <id>` on specific matches
