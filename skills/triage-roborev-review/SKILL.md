@@ -5,13 +5,15 @@ description: >
   tasks, shows findings, fixes code or explains why a finding is skipped,
   then closes both the roborev review and the bd task. Consults the user
   for decisions that require judgement.
-compatibility: Requires the beads CLI (`bd`), the roborev CLI, git, and access to the target project workspace. Verification commands depend on the project's toolchain.
 license: MIT
 ---
 
 # triage-roborev-review
 
 Triage and resolve roborev review findings tracked as beads tasks.
+
+Requires the beads CLI (`bd`), the roborev CLI, git, and access to the target
+project workspace. Verification commands depend on the project's toolchain.
 
 ## Usage
 
@@ -57,8 +59,14 @@ If the job ID cannot be determined from the bd task, ask the user.
 For each job ID:
 
 ```bash
-roborev show <job_id>
+roborev show --job <job_id>
 ```
+
+If `roborev show` reports that the review passed with no findings, report that
+outcome and skip steps 4–6. A passing review is already complete: do not run
+`roborev comment`, `roborev address`, `roborev close`, or any other command that
+mutates the roborev job. Handle the associated bd task separately; close it only
+with the explicit user confirmation required by step 7.
 
 Present the findings to the user with a brief summary of:
 - Number and severity of findings
@@ -128,7 +136,7 @@ User: `/triage-roborev-review`
 Agent:
 1. Runs `bd list --status=open | grep -i review` and finds task `dd99`
 2. Extracts job ID `389` from the task title
-3. Runs `roborev show 389` and presents 2 findings (Medium + Low)
+3. Runs `roborev show --job 389` and presents 2 findings (Medium + Low)
 4. Proposes: fix the Medium finding, skip the Low with reasoning
 5. Waits for user approval
 6. Fixes the Medium finding, commits
@@ -140,5 +148,5 @@ Agent:
 User: `/triage-roborev-review dd99`
 
 Agent:
-1. Runs `bd show dd99` to get task details
+1. Runs `bd show --job dd99` to get task details
 2. Extracts job ID, fetches review, proceeds as above
