@@ -16,12 +16,19 @@ Use this instead of `bd search`, which only searches titles. Includes closed iss
 
 ### [`triage-roborev-review`](skills/triage-roborev-review/SKILL.md)
 
-Triage and resolve [roborev](https://github.com/roborev-dev/roborev) review findings tracked as beads tasks
-via the built-in Beads Integration hooks.
-
-Discovers open review tasks, presents findings with recommended actions, fixes approved issues, and closes both the roborev review and the bd task — with explicit user confirmation at each decision point.
+Track an already-enqueued [roborev](https://github.com/roborev-dev/roborev)
+review after a commit, or evaluate findings recorded as Beads tasks, then
+reconcile resolved FAIL reviews and their tasks while respecting authorization.
 
 **Prerequisites:** `bd` CLI, `roborev` CLI, git
+
+### [`add-beads-comment`](skills/add-beads-comment/SKILL.md)
+
+Add durable Beads issue comments with input-selection guidance, recommending
+quoted heredocs for shell-sensitive or multiline content and avoiding
+unintentional expansion or duplicate retries.
+
+**Prerequisites:** `bd` CLI
 
 ## Installation
 
