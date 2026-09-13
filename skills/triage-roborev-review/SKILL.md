@@ -1,21 +1,19 @@
 ---
 name: triage-roborev-review
-description: >
-  Triage roborev findings tracked as beads tasks. Use when a coding agent
-  should inspect earlier review findings against the code, resolve accepted
-  findings, and follow the post-commit review through completion. Do not use
-  this skill merely to start a new review.
+description: Track an enqueued roborev review, triage its findings, and reconcile resolved FAIL reviews and their Beads tasks.
 license: MIT
 ---
 
 # triage-roborev-review
 
-Use one coding agent to evaluate roborev findings against the current code,
-carry the accepted fixes through verification, and inspect the follow-up review
-without losing context.
+Use this skill for an already-enqueued roborev review. It supports both a
+post-commit follow-up with no Beads task and findings recorded in Beads. It
+owns assessment, authorized remediation, verification, and reconciliation of
+resolved FAIL reviews and their Beads tasks. It does not enqueue a new review
+or prescribe the repository's development, testing, formatting, or commit workflow.
 
-Requires the beads CLI (`bd`), the roborev CLI, git, and access to the target
-project workspace. Verification commands depend on the project's toolchain.
+Read [references/roborev-beads.md](references/roborev-beads.md) when CLI exit
+semantics, integration task recovery, or closure rules are needed.
 
 ## Usage
 
@@ -23,209 +21,91 @@ project workspace. Verification commands depend on the project's toolchain.
 /triage-roborev-review [bd_task_id...]
 ```
 
-Treat this as a context-sensitive workflow rather than a rigid script. Skip
-work that is already complete, honor project-level instructions, and do not
-infer permission to commit, enqueue reviews, or close records.
+Keep these identifiers paired throughout the work:
 
-## Keep identifiers distinct
-
-A beads task ID, roborev job ID, and Git commit SHA are different identifiers.
-Never pass one where another is expected.
-
-- `bd show <bd_task_id>` accepts a beads task ID. It has no `--job` flag.
-- `roborev show --job <job_id>` forces a numeric argument to be a roborev job
-  ID instead of a Git ref.
-- `roborev wait --job <job_id>` waits for an existing roborev job. It does not
-  enqueue a review.
-- `roborev comment --job <job_id> --message <message>` records a job comment.
-- `roborev close <job_id>` accepts a job ID directly and has no `--job` flag.
-- `roborev fix <job_id>` accepts job IDs directly and has no `--job` flag.
-
-Prefer the explicit `--job` form wherever roborev provides it. A numeric Git
-ref can otherwise be mistaken for a job ID or vice versa.
+| Record | Identifier | Authority |
+| --- | --- | --- |
+| Beads finding record | task ID | `bd show` |
+| Review result | numeric job ID | `roborev show --job` |
+| Reviewed code state | full commit SHA | git |
+| Follow-up target | HEAD at reviewed commit | `roborev wait HEAD` |
 
 ## Workflow
 
-### 1. Discover earlier review findings through beads
+### Entry: Post-commit
 
-If the user supplied beads task IDs, inspect each with:
+After a project-authorized commit that requires roborev confirmation, retain
+its full SHA and proceed to **Wait for the current commit**. No Beads task is
+required for this entry.
 
-```bash
-bd show <bd_task_id>
-```
+### Entry: Existing findings
 
-Otherwise, use `bd list` to find outstanding review tasks, including work that
-another session already claimed:
+From the supplied task IDs, or from relevant open Beads review tasks, run
+`bd show` and confirm repository and commit relevance. Extract each task's
+exact roborev job ID and pair it with the Beads task ID as an unresolved active
+review record. A missing or ambiguous job ID is an inconsistency: report it
+without guessing or substituting a new review. Run
+`roborev show --job JOB_ID` once for each known job, then proceed to
+**Inspect and decide**. If completed findings cannot be retrieved, report the
+mismatch or operational error.
 
-```bash
-bd list --status=open,in_progress --title-contains="Review" --limit=0
-```
+### Inspect and decide
 
-Inspect each candidate with `bd show`. The beads queue is the source for
-earlier unresolved findings; do not look only at the review for `HEAD`. If the
-search finds no relevant task, report that result and stop.
+Read the cited code and tests, and classify every finding as valid, already
+fixed, out of scope, or a reasoned false positive. Ask for the missing design
+decision when validity, compatibility, scope, or authorization is unclear.
+A false-positive rejection that requires no change does not need a new commit
+or follow-up PASS.
 
-Before editing, confirm that each task belongs to the current repository and
-that its reviewed commit is relevant to the current branch or worktree. Do not
-overwrite unrelated user changes or take over another active owner's task
-without authorization. Claim a task before working on it when the project's
-beads workflow requires that.
+### Resolve and verify
 
-### 2. Resolve the roborev job ID
+Apply only authorized fixes and verify them using the repository's own
+instructions. Do not invoke `roborev fix`; keep the assessment and fix context
+together. After an authorized fix commit, retain its full SHA and return to
+**Wait for the current commit**. If commit authority is unavailable, hand off
+the fix and state that follow-up review and reconciliation remain incomplete.
 
-Extract the numeric job ID from the task title or description. Integration
-tasks commonly contain either `roborev show <job_id>` or
-`roborev show --job <job_id>`, and may also advertise
-`roborev fix <job_id>`. Treat the `roborev fix` text as a convenience offered by
-the integration, not as an instruction to run it.
+### Wait for the current commit
 
-If a task says `Review failed`, or the job ID is absent or ambiguous, do not
-guess and do not enqueue a replacement review. Use the commit SHA and
-`roborev list --json` to resolve an exact existing job when possible; otherwise
-report the mismatch and ask the user how to handle the beads task.
-
-### 3. Inspect the review and the code
-
-For a completed job, fetch the authoritative result with:
+Keep `HEAD` at the reviewed commit from starting the wait through processing
+its result. When the harness provides a resumable or background facility,
+prefer it; otherwise, run the wait in the foreground. In either case, run
+exactly one:
 
 ```bash
-roborev show --job <job_id>
+roborev wait HEAD
 ```
 
-If the job is still queued or running, wait for that exact existing job instead
-of polling `roborev list` or `roborev show`:
+Process the output directly as PASS, FAIL, or operational error. If this is a
+post-commit entry with no active FAIL records, a PASS is clean: report it and
+finish immediately. Do not run `bd list`, `bd show`, `bd create`, `bd comments add`,
+or `bd close`, and do not modify or close the passing job. A PASS after fixing
+active FAIL records leaves the passing job untouched and proceeds to
+**Reconcile and close**. An operational error is reported as incomplete. Do
+not search for a follow-up job ID or use another roborev list/show command,
+or enqueue a replacement review.
 
-```bash
-roborev wait --job <job_id>
-```
+For FAIL, evaluate the findings from the wait output and recover integration
+tasks with `bd list --status=open,in_progress --title-contains="Review findings" --limit=0`,
+then inspect candidates with `bd show`. Confirm that each task's recorded
+commit prefix is a prefix of the known full SHA; do not assume a fixed
+short-SHA length. Add the task ID and its recorded job ID to the active
+records and claim it when required, then return to **Inspect and decide**.
 
-When the execution environment supports background commands or resumable
-command sessions, use that facility for `roborev wait --job`. Keep whatever
-execution handle the environment provides and the job-to-commit mapping,
-continue other independent work, and collect the result from that same command
-when completion is reported. Prefer the environment's supported mechanism over
-a bare shell `&`, so the exit status and output are not lost. Do not start
-duplicate waits for the same job. If no such facility exists, let
-`roborev wait` block in the foreground.
+If the integration task is not immediately present, keep the record unresolved
+and reconcile once before finishing; do not poll, create a substitute task, or
+use a roborev queue lookup. After another authorized fix commit, return to this
+state for one new `roborev wait HEAD` cycle.
 
-`roborev wait` exits with status 1 for a completed FAIL verdict as well as for
-operational errors. A FAIL verdict normally means there are findings to
-triage, so after the wait completes inspect the result with:
+### Reconcile and close
 
-```bash
-roborev show --job <job_id>
-```
+A PASS is verification evidence, not automatic closure. For every active
+record, require all findings to be fixed or supported by a documented
+rejection, required verification to be complete, and closure authorization.
+Then comment on and close each resolved FAIL review, and record the result on
+the Beads task before closing it. Use the project's available tooling for the
+comment input. Never modify or close the passing follow-up job.
 
-For every finding, the coding agent should read the cited code and relevant
-tests or commit diff, then decide whether the finding is still valid. Present a
-compact assessment containing:
-
-- severity and affected location
-- why the finding is valid, invalid, already fixed, or out of scope
-- the recommended fix, rejection rationale, or deferral
-- the verification needed for an accepted fix
-
-Do not accept a finding merely because roborev reported it. Equally, do not
-dismiss it without checking the actual code and behavior.
-
-If the review passed with no findings, no triage action is required. Note the
-outcome briefly, do not comment on or close the passing roborev job, and proceed
-to the next discovered review task or other authorized work. If an associated
-beads task remains, treat it as a separate administrative record and apply the
-project's existing closure authorization without holding up independent work.
-
-### 4. Resolve judgement with the user
-
-Use any explicit decisions already given in the conversation. Otherwise, ask
-before making a change when validity, scope, compatibility, or design requires
-judgement. The user may accept, reject, defer, or request more investigation
-for each finding.
-
-Rejecting, skipping, or deferring a finding does not itself authorize closing
-the roborev job or beads task. Record durable reasoning in beads comments when
-the project uses comments for work history.
-
-### 5. Implement and verify accepted findings
-
-For each accepted finding:
-
-1. Apply the smallest complete fix consistent with the surrounding design.
-2. Add or update a regression test when it materially protects the behavior.
-3. Run targeted formatting, linting, and tests, followed by the project's
-   broader quality gate when appropriate.
-4. Re-read the diff and confirm that it addresses the finding without
-   incorporating unrelated changes.
-
-Keep the coding agent in this workflow responsible for the fix. Do not invoke
-`roborev fix` by default: it launches a separate agent, commits its changes,
-and closes the review, bypassing this workflow's continuous context and
-explicit closure decision. Use it only when the user specifically requests
-that automation.
-
-### 6. Commit and wait for the follow-up review
-
-Commit only when the user or project workflow authorizes it. Follow project
-commit conventions and create a new commit; never amend the commit associated
-with the original review job.
-
-When a post-commit hook enqueues a follow-up review, capture its exact numeric
-job ID from the hook output or resolve the job that matches the new commit SHA.
-Do not choose a job merely because it is the newest when concurrent reviews may
-exist. Start a wait for that exact job using the execution environment's
-background or resumable-session facility when available:
-
-```bash
-roborev wait --job <follow_up_job_id>
-```
-
-When that command completes, inspect the result:
-
-```bash
-roborev show --job <follow_up_job_id>
-```
-
-Use `roborev wait --job` instead of repeated `list` or `show` polling. Because
-`wait` only waits for an existing job, a not-found result is not permission to
-run `roborev review`; report the missing post-commit job unless the user has
-authorized enqueueing one.
-
-Inspect the follow-up output even when `wait` exits nonzero. If it contains new
-findings, keep the same coding-agent context and return to the assessment step.
-Do not hand the loop to `roborev fix` merely because another iteration is
-needed.
-
-If the follow-up review passes, do nothing to that passing job and do not stop
-to request a decision about it. Use the PASS as verification evidence for the
-original findings, finish any already-authorized bookkeeping for the original
-roborev jobs and beads tasks, and continue to the next review task or other
-authorized work. If closure of an original record is not authorized, report
-that remaining administrative action without blocking independent work.
-
-### 7. Record and close resolved work
-
-Close only when the user has explicitly authorized closure in the current
-conversation. An earlier direct instruction to fix and close is sufficient;
-do not ask redundantly. Otherwise, fixing or rejecting a finding does not imply
-closure.
-
-Before closing a non-passing original review, leave a useful record of what was
-changed or why the finding was rejected, then use the canonical close command:
-
-```bash
-roborev comment --job <job_id> --message "<resolution_summary>"
-roborev close <job_id>
-```
-
-Comment before closing. `roborev address` may exist as an alias, but prefer the
-documented `roborev close` command. Do not close a passing follow-up review.
-
-Add a beads comment summarizing the decision, changed commit if any,
-verification, and follow-up review result. Then close the corresponding task
-separately:
-
-```bash
-bd close <bd_task_id> --reason="<reason>"
-```
-
-When handling multiple tasks, preserve the job-to-task mapping and close only
-the pairs whose findings are fully resolved and authorized for closure.
+If authorization, verification, task recovery, or a finding is outstanding,
+leave the affected records open and report the exact handoff. Finish only when
+all active records are reconciled and the authorized bookkeeping is complete.
