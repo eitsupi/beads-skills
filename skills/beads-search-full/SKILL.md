@@ -1,6 +1,6 @@
 ---
 name: beads-search-full
-description: Ranked search across long-lived Beads issue history using a disposable SQLite FTS5 index. Use when natural-language or identifier searches need better candidate ordering than literal full-text search.
+description: Recover context and discover relevant records across long-lived Beads history with relevance-ranked FTS5 search. Prefer it for resuming previous work, reconstructing decisions, finding comments or related issues from natural-language concepts or partial clues, and retrying noisy literal searches. Do not use for a known exact issue ID or exhaustive literal/regex matching.
 license: MIT
 ---
 
@@ -9,6 +9,21 @@ license: MIT
 Use this skill to retrieve a small, relevance-ranked set of issues from a
 long-lived Beads history. It requires Bash, the Beads CLI (`bd`), and Deno with
 the built-in `node:sqlite` module and SQLite FTS5 support.
+
+## When to use
+
+Prefer this skill over ordinary `bd search` when the goal is context recovery or
+candidate discovery rather than exhaustive matching. Typical triggers are:
+
+- resuming work from a previous session;
+- reconstructing why a decision was made or recovering design rationale;
+- finding relevant comments or related tasks when the exact wording is unknown;
+- searching by natural-language concepts, partial clues, or identifiers;
+- retrying after literal search returns no useful match or too many noisy
+  matches.
+
+If an exact issue ID is known, inspect it directly with `bd show`. Use ordinary
+`bd search` for fast title, ID-prefix, and structured-field filtering.
 
 Always invoke the wrapper with `bash`. Do not execute it directly because an
 installed skill may not preserve executable permission bits:
@@ -71,8 +86,7 @@ metadata, retrieval path, and title without full bodies or comments. Use
 `bd show` only for useful candidates.
 
 This skill intentionally does not provide exhaustive literal or
-regular-expression search. Use Beads search or the existing literal full-text
-skill when every match must be enumerated or a regular expression is required.
-Arbitrary substrings shorter than three characters, especially CJK substrings,
-also belong in Beads search or the existing literal full-text skill; this ranked
-MVP does not add an exhaustive fallback for them.
+regular-expression search. It also cannot match arbitrary substrings shorter
+than three characters, especially CJK substrings. When a task requires those
+semantics, treat this limitation explicitly rather than presenting the ranked
+results as exhaustive.
