@@ -10,11 +10,11 @@ knowledge, not the triage skill's core workflow.
 
 ## Command semantics
 
-- `roborev show --job JOB_ID` addresses the recorded numeric review job.
-- `roborev wait HEAD` waits for the review associated with the current commit;
-  its output is the follow-up result to process directly.
-- `roborev comment --job JOB_ID --message MESSAGE` records the resolution on a
-  resolved FAIL review; `roborev close JOB_ID` closes that review.
+- `roborev job show --job JOB_ID` addresses the recorded numeric review job.
+- `roborev job wait HEAD` waits for the review associated with the current
+  commit; its output is the follow-up result to process directly.
+- `roborev job comment --job JOB_ID --message MESSAGE` records the resolution
+  on a resolved FAIL review; `roborev job close JOB_ID` closes that review.
 - A completed PASS should be treated as successful verification. A completed
   FAIL can return a nonzero status while still containing findings. An
   operational error is not evidence about the code and is report-only.

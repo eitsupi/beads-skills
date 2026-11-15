@@ -26,9 +26,9 @@ Keep these identifiers paired throughout the work:
 | Record | Identifier | Authority |
 | --- | --- | --- |
 | Beads finding record | task ID | `bd show` |
-| Review result | numeric job ID | `roborev show --job` |
+| Review result | numeric job ID | `roborev job show --job` |
 | Reviewed code state | full commit SHA | git |
-| Follow-up target | HEAD at reviewed commit | `roborev wait HEAD` |
+| Follow-up target | HEAD at reviewed commit | `roborev job wait HEAD` |
 
 ## Workflow
 
@@ -45,7 +45,7 @@ From the supplied task IDs, or from relevant open Beads review tasks, run
 exact roborev job ID and pair it with the Beads task ID as an unresolved active
 review record. A missing or ambiguous job ID is an inconsistency: report it
 without guessing or substituting a new review. Run
-`roborev show --job JOB_ID` once for each known job, then proceed to
+`roborev job show --job JOB_ID` once for each known job, then proceed to
 **Inspect and decide**. If completed findings cannot be retrieved, report the
 mismatch or operational error.
 
@@ -73,7 +73,7 @@ prefer it; otherwise, run the wait in the foreground. In either case, run
 exactly one:
 
 ```bash
-roborev wait HEAD
+roborev job wait HEAD
 ```
 
 Process the output directly as PASS, FAIL, or operational error. If this is a
@@ -95,7 +95,7 @@ records and claim it when required, then return to **Inspect and decide**.
 If the integration task is not immediately present, keep the record unresolved
 and reconcile once before finishing; do not poll, create a substitute task, or
 use a roborev queue lookup. After another authorized fix commit, return to this
-state for one new `roborev wait HEAD` cycle.
+state for one new `roborev job wait HEAD` cycle.
 
 ### Reconcile and close
 
